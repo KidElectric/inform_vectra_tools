@@ -33,13 +33,16 @@ master_scale = 1 #I think vectra outputs might already be in microns?
 def seg_fn_to_unique_tma_code(fns,
                               method=1):
     unique_codes=[]
-    for fn in fns:
-        core = 'Core[' + fn.split('Core[')[1].split(']_')[0] + ']'
-        if method==1:
-            tma = 'TMA%s_' % fn.split(' #')[1][0:2]
-        elif method==2:
-            tma = 'TMA%02.0f_' % int(fn.split('TMA_')[1][0])
-        unique_codes.append(tma + core)
+    for fn in fns:        
+        if 'TMA' in fn:
+            core = 'Core[' + fn.split('Core[')[1].split(']_')[0] + ']'
+            if method==1:
+                tma = 'TMA%s_' % fn.split(' #')[1][0:2]
+            elif method>=2:
+                tma = 'TMA%02.0f_' % int(fn.split('TMA_')[1][0])
+            unique_codes.append(tma + core)
+        else:
+            unique_codes.append(fn.split('_cell_seg_data.txt')[0])    
     return unique_codes
 
 def get_min_columns(df):
@@ -69,7 +72,8 @@ def get_celltypes(df):
 def multi_to_index(df, 
                    multi_dict, 
                    use,
-                   exclusive=True, #I.e. assume all phenotypes not indicated must be negative
+                   col_types=[],
+                   exclusive=False, #I.e. assume all phenotypes not indicated must be negative
                    qc_thresh= 50,
                    verbose = False):
     '''
@@ -81,24 +85,36 @@ def multi_to_index(df,
                          'CD3-_CD16+': {'CD3+': False, 'CD16+': True},
                          'CD3-_CD16+_TBet+': {'CD3+': False, 'CD16+': True, 'TBet+': True}}    
     '''
-    use_dict = multi_dict[use]
+    use_multi_marker_cell = multi_dict[use]
    
-    idx = (np.zeros((df.iloc[:,0].shape[0],)) + 1).astype(bool)     # Start all True:
+    idx = (np.zeros((df.shape[0],)) + 1).astype(bool)     # Start all True:
     if verbose:
-        print('Cell combination %s' % use)
-    for cell in use_dict.keys():
-        cell_col = cell
-        conf_col = 'Conf-%s' % cell               
+        print('Marker combination %s' % use)
+    for marker in use_multi_marker_cell.keys():
+        marker_col = 'Phenotype-%s' % marker[:-1]
+        conf_col = 'Confidence-%s' % marker[:-1]               
         qc = get_qc(df, conf_col, qc_thresh)
-        if use_dict[cell]: #If this gene should be +            
-            cell_idx = df.loc[:,cell].values == cell
+        if use_multi_marker_cell[marker]: #If this gene should be +            
+            marker_idx = df.loc[:,marker_col].values == marker
             if verbose:
-                print('\t%s+, n = %d' % (cell[0:-1],np.sum(cell_idx)))
+                print('\t%s+, n = %d' % (marker[:-1],np.sum(marker_idx)))
         else: #This gene should be negative ('Other')            
-            cell_idx = df.loc[:,cell].values == 'Other'
+            marker_idx = df.loc[:,marker_col].values != '%s+' %(marker)
             if verbose:
-                print('\t%s-, n = %d' % (cell[0:-1],np.sum(cell_idx)))
-        idx = idx & qc & cell_idx
+                print('\t%s-, n = %d' % (marker[:-1],np.sum(marker_idx)))
+        idx = idx & qc & marker_idx
+    if exclusive: #Also require that markers not defined are in fact negative (non overlapping)
+        use = [x[:-1] for x in use_multi_marker_cell.keys()]
+        if verbose:
+            print(use)
+        for marker_col in col_types:
+            marker = marker_col.split('-')[1]
+            if marker not in use:
+                neg_idx =  df.loc[:,marker_col].values != '%s+' %(marker)
+                if verbose:
+                    print('\tExcluding %s' % marker)
+                    print('\tn=%d' % np.sum(idx & neg_idx))
+                idx = idx & neg_idx
     return idx
  
 def get_qc(df, col='Confidence', qc_thresh=0):
