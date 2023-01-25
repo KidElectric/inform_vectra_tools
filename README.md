@@ -1,2 +1,2 @@
-# vectra_tools
+# inform_vectra_tools
 Generalized methods for processing inForm vectra outputs
