@@ -130,3 +130,10 @@ def cell_colormap(cell):
                   'CD20+':'m',
                   'FoxP3+':'r'}
     return color_dict[cell]
+
+def vectra_um_to_pixel(dat,coord_cols,img_coord,px_width,img_size):
+    x = dat.loc[:,coord_cols[0]].values
+    x = (x - img_coord[0])/px_width + (img_size[0]/2)  
+    y = dat.loc[:,coord_cols[1]].values
+    y =  (y - img_coord[1])/px_width + (img_size[1]/2)
+    return x,y
