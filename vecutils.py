@@ -54,6 +54,21 @@ def get_celltypes(df,
                 new.append('%s-%s' % (ihc, cl))
     elif method == 'coex_cell':
         new = list(df.coex_cell.unique())
+        
+    elif method == 'inform':
+        xx = df.columns[df.columns.str.contains('Phenotype')]
+        if df.shape[0] > 2e5:
+            print('Too large only evaluating first 100,000 cells!')
+            temp = df.loc[0:1e5,xx].copy()
+        else:
+            temp = df.loc[:,xx].copy()
+        for col in xx:
+            idx = temp.loc[:,col].isin(['Other','other',''])
+            temp.loc[idx,col] = np.nan
+        temp['all_comb'] = temp.apply(lambda x: '_'.join(x.dropna().values.tolist()), axis=1)
+        new= list(temp.all_comb.unique())
+        # new = new[any(new)]
+        
     else:
         xx=df.loc[:,'Phenotype']
         for x in xx:
