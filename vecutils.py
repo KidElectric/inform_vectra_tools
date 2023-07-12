@@ -9,20 +9,31 @@ import pandas as pd
 import numpy as np
 
 def seg_fn_to_unique_tma_code(fns,
-                              method=1):
+                              method=0):
+    #Unique ID like = TMA01_Core[1,11,A]
     unique_codes=[]
     for fn in fns:        
-        if 'TMA' in fn:
+        if ('TMA' in fn) or (method > 0):
             core = 'Core[' + fn.split('Core[')[1].split(']_')[0] + ']'
             if method==1:
                 tma = 'TMA%s_' % fn.split(' #')[1][0:2]
-            elif method>=2:
+            elif method==2:
                 tma = 'TMA%02.0f_' % int(fn.split('TMA_')[1][0])
+            elif method >= 3:
+                tma = 'TMA%s_' % fn.split(' ')[2]
             unique_codes.append(tma + core)
         else:
             unique_codes.append(fn.split('_cell_seg_data.txt')[0])    
     return unique_codes
-
+def unique_tma_code_to_core_num(tma_core,method=1):
+    # Method 1: TMA01_Core[1,11,A] -> 'A11'
+    # Method 2: TMA01_Core[1,11,A] -> '11A'
+    nums=tma_core.split('Core[')[1].split(',')
+    if method == 2:
+        core_num = nums[1] + nums[2][0]
+    elif method == 1:
+        core_num =  nums[2][0] + nums[1]
+    return core_num
 def tissue_id_to_ihc_fn(tissue_id,ihc_slide,method=1):
     if method == 1:
         fn = '%s_%s-%s.tiff' %(ihc_slide, tissue_id[-2],tissue_id[-4])
@@ -54,6 +65,21 @@ def get_celltypes(df,
                 new.append('%s-%s' % (ihc, cl))
     elif method == 'coex_cell':
         new = list(df.coex_cell.unique())
+        
+    elif method == 'inform':
+        xx = df.columns[df.columns.str.contains('Phenotype')]
+        if df.shape[0] > 2e5:
+            print('Too large only evaluating first 100,000 cells!')
+            temp = df.loc[0:1e5,xx].copy()
+        else:
+            temp = df.loc[:,xx].copy()
+        for col in xx:
+            idx = temp.loc[:,col].isin(['Other','other',''])
+            temp.loc[idx,col] = np.nan
+        temp['all_comb'] = temp.apply(lambda x: '_'.join(x.dropna().values.tolist()), axis=1)
+        new= list(temp.all_comb.unique())
+        # new = new[any(new)]
+        
     else:
         xx=df.loc[:,'Phenotype']
         for x in xx:
