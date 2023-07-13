@@ -78,10 +78,9 @@ for idx,lab in zip(idxs,labs):
 
     print('Beginning %s cell connection detection...' % lab)
     connections = delHelpers.df_to_connections_output(subset,
-                                                      cell_col = col_dict['cell_col'],
-                                                      tissue_col = col_dict['tissue_col'],
                                                       scale = scale,
                                                       max_dist = max_dist,
+                                                      col_dict = col_dict
                                                       )
     
     delcx = delHelpers.generate_log_odds_matrix(connections,

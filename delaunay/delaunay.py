@@ -106,8 +106,11 @@ def cell_dist_criterion(center_xy,
 def df_to_connections_output(subset,
                              cell_col = 'Phenotype',
                              tissue_col = 'Tissue Category',
+                             cell_x_pos = 'Cell X Position',
+                             cell_y_pos = 'Cell Y Position',
                              scale = 1,
                              max_dist = 500,
+                             col_dict = None,
                              ):
     '''
         Take subset of segmented cell dataframe and calculate connection counts for each cell as a hub.
@@ -115,20 +118,26 @@ def df_to_connections_output(subset,
            subset - pd.DataFrame of segmented cell coordinates and types
              
     '''
+    if col_dict != None:
+        cell_col = col_dict['cell_col']
+        tissue_col = col_dict['tissue_col']
+        cell_x_pos = col_dict['cell_x_pos']
+        cell_y_pos = col_dict['cell_y_pos']
+        
     if subset.shape[0] > 0:
         point_lookup = df_to_cell_type_dict(subset,
                                             cell_col = cell_col,
                                             tissue_col = tissue_col)
-        points = subset.loc[:,('Cell X Position',
-                               'Cell Y Position')
+        points = subset.loc[:,(cell_x_pos,
+                               cell_y_pos)
                                ].values
         tri = Delaunay(points)
         i = 0
         connections = pd.DataFrame()
         print('Beginning cell connection detection...')
         hub_cell_points = subset.loc[:,
-                            ('Cell X Position',
-                             'Cell Y Position')
+                            (cell_x_pos,
+                             cell_y_pos)
                            ].values    
 
         #For each cell as a hub, count types of connections    
