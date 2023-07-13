@@ -203,7 +203,7 @@ def generate_log_odds_matrix(connections,
                 a = np.sum(use_hub & use_spoke) #Total n connections of hub-type i to spoke-type j.
                 na = np.sum(use_hub & ~use_spoke) #Total n connections of hub-type i to Not spoke-type j.
                 output[j,i] = a / na
-        output = np.log(output+.0001) #there are better corrections
+        output = np.log(output+.0001) #natural logarithm, what is a good correction?
     else:
         output = np.zeros((len(cell_names),len(cell_names))) + np.nan
     return output

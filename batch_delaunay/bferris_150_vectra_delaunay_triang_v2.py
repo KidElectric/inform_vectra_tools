@@ -43,40 +43,47 @@ cell_names = ['CD3_CD8',
               'PD1_CD3_CD8',
               'Treg',
               'PD1_Treg',
-              'PD-L1+',
-              'PD-L1-',
+              'PD-L1',
+              'PanCK',
                ]
 
 col_dict = {'tissue_col': 'Parent',
             'cell_col': 'Class',
             'cell_x_pos' : 'Centroid X µm',
             'cell_y_pos' : 'Centroid Y µm'}
+
 tissue_types = ['Inner margin',
-              'Outer margin']
+              'Outer margin',
+               'Center',
+               'Stroma']
 
 print('scale_factor: %d, max neighbor dist: %d' 
         % (scale,max_dist))
 
 inner_idx = df.loc[:,col_dict['tissue_col'].values == 'Inner margin'
-outer_idx = df.loc[:,col_dict['tissue_col'].values == 'Outer margin'                   
-idxs = [inner_idx,
-        outer_idx,
-        inner_idx & outer_idx
+outer_idx = df.loc[:,col_dict['tissue_col'].values == 'Outer margin'   
+center_idx = df.loc[:,col_dict['tissue_col'].values == 'Center'
+stroma_idx = df.loc[:,col_dict['tissue_col'].values == 'Stroma'
+idxs = [center_idx,
+        inner_idx & outer_idx,
+        stroma_idx
        ]
 
-labs = ['inner','outer','full_margin']
+labs = ['tumor_center','full_margin', 'stroma']
 
 keep_cx = []
 fig = plt.figure(figsize=(18,11))
 i = 1
 start = time.time()
 out_stack = []
-idx = inner_idx | outer_idx
+idx = df.loc[:,col_dict['cell_col']].isin(cell_names)
                    
 for idx,lab in zip(idxs,labs):
     subset=df.loc[idx,:]
-
     print('Beginning %s cell connection detection...' % lab)
+    
+    # if evaluating tumor margin, require minimum number of stromal cells of any kind
+    # be present--> delHelpers.cell_dist_criterion()
     connections = delHelpers.df_to_connections_output(subset,
                                                       scale = scale,
                                                       max_dist = max_dist,
@@ -112,8 +119,8 @@ for idx,lab in zip(idxs,labs):
     connections.to_csv(out_fn)
     
     #Save stack out log-odds connectivity matrices
-    # out_fn = output.joinpath(new_fn + '.npy')
-    # np.save(out_fn, arr=delcx, allow_pickle=False)
+    out_fn = output.joinpath(new_fn + '.npy')
+    np.save(out_fn, arr=delcx, allow_pickle=False)
     
     i = i + 1
 
