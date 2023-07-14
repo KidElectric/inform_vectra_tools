@@ -25,6 +25,7 @@ def seg_fn_to_unique_tma_code(fns,
         else:
             unique_codes.append(fn.split('_cell_seg_data.txt')[0])    
     return unique_codes
+
 def unique_tma_code_to_core_num(tma_core,method=1):
     # Method 1: TMA01_Core[1,11,A] -> 'A11'
     # Method 2: TMA01_Core[1,11,A] -> '11A'
@@ -34,6 +35,7 @@ def unique_tma_code_to_core_num(tma_core,method=1):
     elif method == 1:
         core_num =  nums[2][0] + nums[1]
     return core_num
+
 def tissue_id_to_ihc_fn(tissue_id,ihc_slide,method=1):
     if method == 1:
         fn = '%s_%s-%s.tiff' %(ihc_slide, tissue_id[-2],tissue_id[-4])
@@ -50,7 +52,7 @@ def get_min_columns(df):
     return cols
 
 def get_celltypes(df,
-                  method='vectra',
+                  method='inform',
                   ):
     '''
         vectra->Deal with non-string entries in 'Phenotype' column.
@@ -63,6 +65,7 @@ def get_celltypes(df,
         for ihc in ihc_types:
             for cl in classes:
                 new.append('%s-%s' % (ihc, cl))
+                
     elif method == 'coex_cell':
         new = list(df.coex_cell.unique())
         
@@ -80,6 +83,19 @@ def get_celltypes(df,
         new= list(temp.all_comb.unique())
         # new = new[any(new)]
         
+    elif method == 'qupath':
+        xx = df.columns[df.columns.str.contains('Class')]
+        if df.shape[0] > 2e5:
+            print('Too large only evaluating first 100,000 cells!')
+            temp = df.loc[0:1e5,xx].copy()
+        else:
+            temp = df.loc[:,xx].copy()
+        for col in xx:
+            idx = temp.loc[:,col].isin(['Other','other',''])
+            temp.loc[idx,col] = np.nan
+        temp['all_comb'] = temp.apply(lambda x: '_'.join(x.dropna().values.tolist()), axis=1)
+        new= list(temp.all_comb.unique())
+        
     else:
         xx=df.loc[:,'Phenotype']
         for x in xx:
@@ -90,6 +106,64 @@ def get_celltypes(df,
     cell_types=np.array(new)
     return cell_types
 
+def vectra_if_types_to_cell_types(df,
+                                 multi_label_dict= {# T-Cell definitions
+                                             'CD8_CD3_tumor': {'CD3':True, 
+                                                               'CD8': True, 
+                                                               'tissue': 'tumor'},     
+                                             'CD8_CD3_stroma': {'CD3':True, 
+                                                                'CD8': True, 
+                                                                'tissue': 'stroma'}},
+                                 col_dict={'tissue_col': 'Parent',
+                                            'cell_col': 'Class',
+                                            'cell_x_pos' : 'Centroid X µm',
+                                            'cell_y_pos' : 'Centroid Y µm'},
+                                type_adds_tissue = True,
+                                exclusive = False,
+                                output_cell_type_col = 'cell_type',
+                                verbose = False,
+                                ):
+    '''
+        Use a dictionary of mIF markers and tissue types to add cell type label to 'cell_type' column of df
+    '''
+    cell_col = col_dict['cell_col']
+    tissue_col = col_dict['tissue_col']
+    cell_labels = [x for x in multi_label_dict.keys()]
+    for cell in cell_labels: 
+        tot = df.shape[0]
+        if exclusive: #Use designated markers exclusively           
+            idx = (np.zeros((tot,))).astype(bool) # Start false
+            for cond in multi_label_dict[cell]: 
+                use =  multi_label_dict[cell][cond]
+                if (cond != 'tissue'):             
+                    idx = idx | ((df.loc[:,cell_col].values == cond) == use)
+                    
+            if type_adds_tissue:
+                use =  multi_label_dict[cell]['tissue']
+                idx = idx & (df.loc[:,tissue_col].values == use)  
+            if verbose:
+                print(cell_col,tissue_col, '==', cell,'n=', np.sum(idx))
+        else: #everything else is inclusive of designanted markers
+            idx = (np.zeros((tot,)) + 1).astype(bool) # Start true
+            for cond in multi_label_dict[cell]:     
+                use = multi_label_dict[cell][cond]
+                if (cond == 'tissue') and type_adds_tissue:
+                    idx2 = (df.loc[:,tissue_col].values == use) 
+                    idx = idx & idx2
+                    if verbose:
+                        print(tissue_col, cond, '==', use,'n=', np.sum(idx2))
+                else:
+                    idx2 = (df.loc[:,cell_col].str.contains(cond) == use)
+                    idx = idx & idx2
+                    if verbose:
+                        print(cell_col, cond, '==', use,'n=', np.sum(idx2))
+                        
+            if verbose:
+                print('\t',cell_col,tissue_col, '==', cell,'n=', np.sum(idx))
+
+        df.loc[idx, output_cell_type_col] = cell
+    return df
+                         
 def multi_to_index(df, 
                    multi_dict, 
                    use,
