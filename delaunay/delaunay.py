@@ -104,13 +104,11 @@ def cell_dist_criterion(center_xy,
     return is_neighbor, scaled_dist
 
 def df_to_connections_output(subset,
-                             cell_col = 'Phenotype',
-                             tissue_col = 'Tissue Category',
-                             cell_x_pos = 'Cell X Position',
-                             cell_y_pos = 'Cell Y Position',
+                             hub_cells,
                              scale = 1,
                              max_dist = 500,
-                             col_dict = None,
+                             tissue_crit={},
+                             col_dict = None,                             
                              ):
     '''
         Take subset of segmented cell dataframe and calculate connection counts for each cell as a hub.
@@ -123,11 +121,20 @@ def df_to_connections_output(subset,
         tissue_col = col_dict['tissue_col']
         cell_x_pos = col_dict['cell_x_pos']
         cell_y_pos = col_dict['cell_y_pos']
+    else:
+        cell_col = 'Phenotype'
+        tissue_col = 'Tissue Category'
+        cell_x_pos = 'Cell X Position'
+        cell_y_pos = 'Cell Y Position'
+        
+    if 'tls_id' in subset.columns:
+        use_tls_id = True
+    else:
+        use_tls_id = False
         
     if subset.shape[0] > 0:
         point_lookup = df_to_cell_type_dict(subset,
-                                            cell_col = cell_col,
-                                            tissue_col = tissue_col)
+                                            col_dict = col_dict)
         points = subset.loc[:,(cell_x_pos,
                                cell_y_pos)
                                ].values
@@ -135,13 +142,15 @@ def df_to_connections_output(subset,
         i = 0
         connections = pd.DataFrame()
         print('Beginning cell connection detection...')
-        hub_cell_points = subset.loc[:,
+        
+        hub_idx = subset.loc[:,cell_col].isin(hub_cells)
+        hub_cell_points = subset.loc[hub_idx,
                             (cell_x_pos,
                              cell_y_pos)
-                           ].values    
-
+                           ]
+        print(subset.loc[hub_idx,cell_col].unique())
         #For each cell as a hub, count types of connections    
-        for i, hub in zip(subset.index,hub_cell_points):
+        for i, hub in zip(hub_cell_points.index,hub_cell_points.values):
             vert = point_to_vert(tri.points, hub)
             if vert > 0:
                 connected_verts = vert_to_connected_verts(vert, tri)
@@ -156,14 +165,29 @@ def df_to_connections_output(subset,
                 connected_points = connected_points[is_neighbor]
                 connected_dists = dists[is_neighbor]
                 spoke_cell_types = point_list_to_celltype(connected_points, point_lookup)
-                temp = pd.DataFrame(spoke_cell_types, columns = ['cx_cell','cx_tissue'])
-                temp['dist_um'] = connected_dists
-                temp['hub_id'] = i
-                temp['cx_id'] = cx_ids
-                temp['hub_cell'] = subset.loc[i, cell_col]
-                temp['hub_tissue'] = subset.loc[i, tissue_col]
-                temp['tls_id'] = subset.loc[i,'tls_id']                
-                connections = pd.concat((connections,temp),axis=0)
+                
+                if any(tissue_crit):
+                    tissues = [x for x in tissue_crit.keys()]
+                    assessment = []
+                    for tissue in tissues:
+                        min_cells = tissue_crit[tissue]
+                        num_tissue_cells = np.sum(pd.Series(spoke_cell_types).str.contains(tissue))
+                        assessment.append(num_tissue_cells > min_cells)
+                else:
+                    assessment = [True]
+                required_tissues_found = not any([x == False for x in assessment])                                 
+                if required_tissues_found:                        
+                    temp = pd.DataFrame(spoke_cell_types, columns = ['cx_cell','cx_tissue'])
+                    temp['dist_um'] = connected_dists
+                    temp['hub_id'] = i
+                    temp['cx_id'] = cx_ids
+                    temp['hub_cell'] = subset.loc[i, cell_col]
+                    temp['hub_tissue'] = subset.loc[i, tissue_col]
+                    if use_tls_id:
+                        temp['tls_id'] = subset.loc[i,'tls_id']                
+                    connections = pd.concat((connections,temp),axis=0)
+                else:
+                    print(i,hub,'Tissue criteria not met')
             else:
                 print(i,hub,'Not found')
         

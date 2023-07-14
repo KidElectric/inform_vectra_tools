@@ -107,28 +107,32 @@ def get_celltypes(df,
     return cell_types
 
 def vectra_if_types_to_cell_types(df,
-                                 multi_label_dict= {# T-Cell definitions
+                                  multi_label_dict= {# T-Cell definitions
                                              'CD8_CD3_tumor': {'CD3':True, 
                                                                'CD8': True, 
                                                                'tissue': 'tumor'},     
                                              'CD8_CD3_stroma': {'CD3':True, 
                                                                 'CD8': True, 
                                                                 'tissue': 'stroma'}},
-                                 col_dict={'tissue_col': 'Parent',
+                                  col_dict={'tissue_col': 'Parent',
                                             'cell_col': 'Class',
                                             'cell_x_pos' : 'Centroid X µm',
                                             'cell_y_pos' : 'Centroid Y µm'},
-                                type_adds_tissue = True,
-                                exclusive = False,
-                                output_cell_type_col = 'cell_type',
-                                verbose = False,
-                                ):
+                                  type_adds_tissue = True,
+                                  exclusive = False,
+                                  output_cell_type_col = 'cell_type',
+                                  verbose = False,
+                                  ):
     '''
-        Use a dictionary of mIF markers and tissue types to add cell type label to 'cell_type' column of df
+    
+       Use a dictionary of mIF markers and tissue types 
+       to add cell type label to 'cell_type' column of df.
+    
     '''
     cell_col = col_dict['cell_col']
     tissue_col = col_dict['tissue_col']
     cell_labels = [x for x in multi_label_dict.keys()]
+    df.loc[:, output_cell_type_col] = df.loc[:,cell_col]
     for cell in cell_labels: 
         tot = df.shape[0]
         if exclusive: #Use designated markers exclusively           
@@ -136,36 +140,35 @@ def vectra_if_types_to_cell_types(df,
             for cond in multi_label_dict[cell]: 
                 use =  multi_label_dict[cell][cond]
                 if (cond != 'tissue'):             
-                    idx = idx | ((df.loc[:,cell_col].values == cond) == use)
-                    
+                    idx = idx | ((df.loc[:,cell_col].values == cond) == use)                    
             if type_adds_tissue:
                 use =  multi_label_dict[cell]['tissue']
                 idx = idx & (df.loc[:,tissue_col].values == use)  
             if verbose:
                 print(cell_col,tissue_col, '==', cell,'n=', np.sum(idx))
+                
         else: #everything else is inclusive of designanted markers
             idx = (np.zeros((tot,)) + 1).astype(bool) # Start true
             for cond in multi_label_dict[cell]:     
                 use = multi_label_dict[cell][cond]
-                if (cond == 'tissue') and type_adds_tissue:
-                    idx2 = (df.loc[:,tissue_col].values == use) 
-                    idx = idx & idx2
-                    if verbose:
-                        print(tissue_col, cond, '==', use,'n=', np.sum(idx2))
+                if (cond == 'tissue'):
+                    if type_adds_tissue:
+                        idx2 = (df.loc[:,tissue_col].values == use) 
+                        idx = idx & idx2
+                        if verbose:
+                            print(tissue_col, cond, '==', use,'n=', np.sum(idx2))
                 else:
                     idx2 = (df.loc[:,cell_col].str.contains(cond) == use)
                     idx = idx & idx2
                     if verbose:
-                        print(cell_col, cond, '==', use,'n=', np.sum(idx2))
-                        
+                        print(cell_col, cond, '==', use,'n=', np.sum(idx2),'total',np.sum(idx))                        
             if verbose:
                 print('\t',cell_col,tissue_col, '==', cell,'n=', np.sum(idx))
-
         df.loc[idx, output_cell_type_col] = cell
     return df
                          
-def multi_to_index(df, 
-                   multi_dict, 
+def multi_to_index(df,
+                   multi_dict,
                    use,
                    col_types=[],
                    exclusive=False, #I.e. assume all phenotypes not indicated must be negative
