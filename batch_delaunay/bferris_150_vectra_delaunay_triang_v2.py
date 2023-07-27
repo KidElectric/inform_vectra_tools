@@ -40,13 +40,15 @@ df = pd.read_csv(fn, sep='\t')
 
 scale = 1
 max_dist = 35 #microns
-tissue_crit = {}
 
 col_dict = {'tissue_col': 'Parent',
             'cell_col': 'Class',
             'cell_x_pos' : 'Centroid X µm',
-            'cell_y_pos' : 'Centroid Y µm'}
+            'cell_y_pos' : 'Centroid Y µm'
+            'output_cell_col': 'cell_type'}
 
+# Cell type definitions file:
+# Ideally make into .json or yaml ?
 multi_label_types = {
      #PDL1-
      'PDL1-_tiv_inner': {'PD-L1': False,
@@ -69,6 +71,7 @@ multi_label_types = {
                            'tissue':'Outer margin'},   
      'CD8_CD3_central_tumor': {'CD3':True, 'CD8': True, 
                            'tissue': 'Center'},  
+    
      #PD1+ T-cell CD8 CD3
      'PD1_CD8_CD3_tiv_inner': {'CD3':True, 'CD8': True, 'PD-1': True,
                                'tissue':'Inner margin'}, 
@@ -90,92 +93,99 @@ multi_label_types = {
                             'tissue':'Outer margin'},   
      'PD1_Treg_central_tumor': {'CD3':True, 'FOXP3':True, 'PD-1': True,
                             'tissue': 'Center'},
+    
+    #PDL1+ PanCK- PDL1- as estimate of macrophages:
+    'PDL1-_CD3-PanCK-Macro_tiv_inner': {'CD3':False, 'PanCK': False, 'PD-L1': False,
+                        'tissue':'Inner margin'}, 
+    'PDL1-_CD3-PanCK-Macro_tiv_outer': {'CD3':False, 'PanCK': False, 'PD-L1': False,
+                        'tissue':'Outer margin'},   
+    'PDL1-_CD3-PanCK-Macro_central_tumor': {'CD3':False, 'PanCK': False, 'PD-L1': False,
+                        'tissue': 'Center'},
+    
+     #PDL1+ CD3- PanCK- as estimate of macrophages:
+    'PDL1+_CD3-PanCK-Macro_tiv_inner': {'CD3':False, 'PanCK': False, 'PD-L1': True,
+                        'tissue':'Inner margin'}, 
+    'PDL1+_CD3-PanCK-Macro_tiv_outer': {'CD3':False, 'PanCK': False, 'PD-L1': True,
+                        'tissue':'Outer margin'},   
+    'PDL1+_CD3-PanCK-Macro_central_tumor': {'CD3':False, 'PanCK': False, 'PD-L1': True,
+                        'tissue': 'Center'},
     }
-df = vecUtils.vectra_if_types_to_cell_types(df.copy(),
-                                 multi_label_dict= multi_label_types,
-                                 col_dict= col_dict,
+
+x = np.array([x for x in multi_label_types.keys()])
+tiv_only = x[pd.Series(x).str.contains('tiv')] #All tumor invasive margin hub types
+inner_tiv = x[pd.Series(x).str.contains('inner')] #All inner vasive margin hub types
+df = vecUtils.vectra_if_types_to_cell_types(
+                                 df.copy(),
+                                 multi_label_dict = multi_label_types,
+                                 col_dict = col_dict,
                                  verbose = True,
                                  type_adds_tissue = True,
                                  exclusive = False,
-                                 output_cell_type_col = 'cell_type',
+                                 output_cell_type_col = col_dict['output_cell_type'],
                                 )
-hub_cells = ['PDL1+_tiv_inner',
-             'CD8_CD3_tiv_outer',
-             'PD1_CD8_CD3_tiv_outer']
 
-# Check any hub cells in df
+print(df.groupby('cell_type')['Class'].count())
 
-tissue_types = ['Inner margin',
-              'Outer margin',
-               'Center',
-               'Stroma']
+hub_cells = inner_tiv
+
+            # ['PDL1+_tiv_inner',
+            #  'PDL1-_tiv_inner']
+
+tissue_crit = {'Outer margin': 0} #Tissue type & min number of cells > 0
+
 
 print('scale_factor: %d, max neighbor dist: %d' 
         % (scale,max_dist))
-
-inner_idx = df.loc[:,col_dict['tissue_col'].values == 'Inner margin'
-outer_idx = df.loc[:,col_dict['tissue_col'].values == 'Outer margin'   
-center_idx = df.loc[:,col_dict['tissue_col'].values == 'Center'
-stroma_idx = df.loc[:,col_dict['tissue_col'].values == 'Stroma'
-idxs = [center_idx,
-        inner_idx & outer_idx,
-        stroma_idx
-       ]
-
-labs = ['tumor_center','full_margin', 'stroma']
 
 keep_cx = []
 fig = plt.figure(figsize=(18,11))
 i = 1
 start = time.time()
 out_stack = []
-idx = df.loc[:,col_dict['cell_col']].isin(cell_names)
+idx = ~df.loc[:,col_dict['cell_col']].isna()
+subset=df.loc[idx,:].reset_index()
                    
-for idx,lab in zip(idxs,labs):
-    subset=df.loc[idx,:]
-    print('Beginning %s cell connection detection...' % lab)
-    
-    # if evaluating tumor margin, require minimum number of stromal cells of any kind
-    # be present--> delHelpers.cell_dist_criterion()
-    connections = delHelpers.df_to_connections_output(subset,
-                                                      scale = scale,
-                                                      max_dist = max_dist,
-                                                      col_dict = col_dict
-                                                      )
-    
-    delcx = delHelpers.generate_log_odds_matrix(connections,
-                                                 cell_names,
-                                                 tissue_types,
-                                                 version = 2)
-       
-    out_stack.append(delcx)
-    ax = fig.add_subplot(2,len(labs),i,aspect='equal')
-    ax = delPlots.connection_heatmap(delcx, 
-                                     cell_names,
-                                     ax = ax
-                                    )
-    ax.set_title(lab)
-    
-    if i > 1:
-        ylabel=''
-    else:
-        ylabel = 'Spoke Cell'
-    ax.set_ylabel(ylabel)
-    new_fn =jobid + '_' \
-            +  fn.parts[-1].split(']_')[0] \
-            + ']_delaunay_cx_%s' % lab
+print('Beginning cell connection detection...')
 
-    print('Saving %s' % new_fn )
-    
-    #Save full connectivity:
-    out_fn = output.joinpath(new_fn + '.csv')
-    connections.to_csv(out_fn)
-    
-    #Save stack out log-odds connectivity matrices
-    out_fn = output.joinpath(new_fn + '.npy')
-    np.save(out_fn, arr=delcx, allow_pickle=False)
-    
-    i = i + 1
+connections = delHelpers.df_to_connections_output(subset,
+                                                  hub_cells = hub_cells,
+                                                  scale = scale,
+                                                  max_dist = max_dist,
+                                                  col_dict = col_dict,
+                                                  tissue_crit = tissue_crit,                               
+                                                  )
+
+delcx = delHelpers.generate_log_odds_matrix(connections,
+                                             cell_names, 
+                                             version = 1)
+
+out_stack.append(delcx)
+ax = fig.add_subplot(2,len(labs),i,aspect='equal')
+ax = delPlots.connection_heatmap(delcx, 
+                                 cell_names,
+                                 ax = ax
+                                )
+ax.set_title(lab)
+
+if i > 1:
+    ylabel=''
+else:
+    ylabel = 'Spoke Cell'
+ax.set_ylabel(ylabel)
+new_fn =jobid + '_' \
+        +  fn.parts[-1].split(']_')[0] \
+        + ']_delaunay_cx_%s' % lab
+
+print('Saving %s' % new_fn )
+
+#Save full connectivity:
+out_fn = output.joinpath(new_fn + '.csv')
+connections.to_csv(out_fn)
+
+#Save stack out log-odds connectivity matrices
+out_fn = output.joinpath(new_fn + '.npy')
+np.save(out_fn, arr=delcx, allow_pickle=False)
+
 
 # # Plot difference of tls and neighborhood from rest of core:            
 # non_tls = out_stack[2]

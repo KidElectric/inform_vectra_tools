@@ -70,7 +70,9 @@ def vert_to_connected_verts(vert, delaunay):
     all_verts = all_verts[all_verts != vert]
     return all_verts
 
-def point_list_to_celltype(point_list, point_lookup):
+def point_list_to_celltype(point_list, 
+                           point_lookup,
+                           celltypes_as_cols = False):
     '''
     
     Parameters
@@ -108,7 +110,8 @@ def df_to_connections_output(subset,
                              scale = 1,
                              max_dist = 500,
                              tissue_crit={},
-                             col_dict = None,                             
+                             col_dict = None,    
+                             celltypes_as_cols = False
                              ):
     '''
         Take subset of segmented cell dataframe and calculate connection counts for each cell as a hub.
@@ -165,7 +168,8 @@ def df_to_connections_output(subset,
                 cx_ids = connected_verts[is_neighbor]
                 connected_points = connected_points[is_neighbor]
                 connected_dists = dists[is_neighbor]
-                spoke_cell_types = point_list_to_celltype(connected_points, point_lookup)
+                spoke_cell_types = point_list_to_celltype(connected_points, 
+                                                          point_lookup)
                 
                 if any(tissue_crit):
                     tissues = [x for x in tissue_crit.keys()]

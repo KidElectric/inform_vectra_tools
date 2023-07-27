@@ -120,6 +120,7 @@ def vectra_if_types_to_cell_types(df,
                                             'cell_y_pos' : 'Centroid Y µm'},
                                   type_adds_tissue = True,
                                   exclusive = False,
+                                  add_cell_types_as_columns = False, # add cell types as new columns with boolean index, overrides otuput_cell_type_col
                                   output_cell_type_col = 'cell_type',
                                   verbose = False,
                                   ):
@@ -164,7 +165,10 @@ def vectra_if_types_to_cell_types(df,
                         print(cell_col, cond, '==', use,'n=', np.sum(idx2),'total',np.sum(idx))                        
             if verbose:
                 print('\t',cell_col,tissue_col, '==', cell,'n=', np.sum(idx))
-        df.loc[idx, output_cell_type_col] = cell
+        if add_cell_types_as_columns:
+            df.loc[:, cell] = idx # Ensures cell types do not act exslusively
+        else:
+            df.loc[idx, output_cell_type_col] = cell
     return df
                          
 def multi_to_index(df,
