@@ -148,6 +148,7 @@ def df_to_connections_output(subset,
                             (cell_x_pos,
                              cell_y_pos)
                            ]
+        tis_crit_failures = 0
         print(subset.loc[hub_idx,cell_col].unique())
         #For each cell as a hub, count types of connections    
         for i, hub in zip(hub_cell_points.index,hub_cell_points.values):
@@ -171,7 +172,8 @@ def df_to_connections_output(subset,
                     assessment = []
                     for tissue in tissues:
                         min_cells = tissue_crit[tissue]
-                        num_tissue_cells = np.sum(pd.Series(spoke_cell_types).str.contains(tissue))
+                        tis = np.array(spoke_cell_types)[:,1]
+                        num_tissue_cells = np.sum(tis == tissue)
                         assessment.append(num_tissue_cells > min_cells)
                 else:
                     assessment = [True]
@@ -187,10 +189,11 @@ def df_to_connections_output(subset,
                         temp['tls_id'] = subset.loc[i,'tls_id']                
                     connections = pd.concat((connections,temp),axis=0)
                 else:
-                    print(i,hub,'Tissue criteria not met')
+                    tis_crit_failures = tis_crit_failures + 1
+                    # print(i,hub,'Tissue criteria not met')
             else:
                 print(i,hub,'Not found')
-        
+        print('%d hubs failed to meet min cells tissue criteria' % tis_crit_failures)
     else:
         connections = pd.DataFrame(columns = ['cx_cell',
                                        'cx_tissue',
@@ -205,7 +208,7 @@ def df_to_connections_output(subset,
 
 def generate_log_odds_matrix(connections,
                              cell_names,
-                             tissue_types,
+                             tissue_types = ['Tumor'],
                              version = 1,
                             ):
     if connections.shape[0] > 0 :                             

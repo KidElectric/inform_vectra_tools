@@ -37,20 +37,73 @@ else:
     
 df = pd.read_csv(fn, sep='\t')
 
+
 scale = 1
 max_dist = 35 #microns
-cell_names = ['CD3_CD8',
-              'PD1_CD3_CD8',
-              'Treg',
-              'PD1_Treg',
-              'PD-L1',
-              'PanCK',
-               ]
+tissue_crit = {}
 
 col_dict = {'tissue_col': 'Parent',
             'cell_col': 'Class',
             'cell_x_pos' : 'Centroid X µm',
             'cell_y_pos' : 'Centroid Y µm'}
+
+multi_label_types = {
+     #PDL1-
+     'PDL1-_tiv_inner': {'PD-L1': False,
+                        'tissue':'Inner margin'}, 
+     'PDL1-_tiv_outer': {'PD-L1': False,
+                        'tissue':'Outer margin'},   
+     'PDL1-_central_tumor': {'PD-L1': False,
+                           'tissue': 'Center'}, 
+     #PDL1+
+     'PDL1+_tiv_inner': {'PD-L1': True,
+                        'tissue':'Inner margin'}, 
+     'PDL1+_tiv_outer': {'PD-L1': True,
+                        'tissue':'Outer margin'},   
+     'PDL1+_central_tumor': {'PD-L1': True,
+                           'tissue': 'Center'},   
+     # T-Cell CD8 CD3
+     'CD8_CD3_tiv_inner': {'CD3':True, 'CD8': True,
+                           'tissue':'Inner margin'},      
+     'CD8_CD3_tiv_outer': {'CD3':True, 'CD8': True,
+                           'tissue':'Outer margin'},   
+     'CD8_CD3_central_tumor': {'CD3':True, 'CD8': True, 
+                           'tissue': 'Center'},  
+     #PD1+ T-cell CD8 CD3
+     'PD1_CD8_CD3_tiv_inner': {'CD3':True, 'CD8': True, 'PD-1': True,
+                               'tissue':'Inner margin'}, 
+     'PD1_CD8_CD3_tiv_outer': {'CD3':True, 'CD8': True, 'PD-1': True,
+                               'tissue':'Outer margin'},   
+     'PD1_CD8_CD3_central_tumor': {'CD3':True, 'CD8': True, 'PD-1': True,
+                               'tissue': 'Center'},  
+     #Tregs:
+     'Treg_tiv_inner': {'CD3':True, 'FOXP3':True,
+                        'tissue':'Inner margin'}, 
+     'Treg_tiv_outer': {'CD3':True, 'FOXP3':True,
+                        'tissue':'Outer margin'},   
+     'Treg_central_tumor': {'CD3':True, 'FOXP3':True,
+                        'tissue': 'Center'},  
+     #PD1+ Tregs:
+     'PD1_Treg_tiv_inner': {'CD3':True, 'FOXP3':True, 'PD-1': True,
+                            'tissue':'Inner margin'}, 
+     'PD1_Treg_tiv_outer': {'CD3':True, 'FOXP3':True, 'PD-1': True,
+                            'tissue':'Outer margin'},   
+     'PD1_Treg_central_tumor': {'CD3':True, 'FOXP3':True, 'PD-1': True,
+                            'tissue': 'Center'},
+    }
+df = vecUtils.vectra_if_types_to_cell_types(df.copy(),
+                                 multi_label_dict= multi_label_types,
+                                 col_dict= col_dict,
+                                 verbose = True,
+                                 type_adds_tissue = True,
+                                 exclusive = False,
+                                 output_cell_type_col = 'cell_type',
+                                )
+hub_cells = ['PDL1+_tiv_inner',
+             'CD8_CD3_tiv_outer',
+             'PD1_CD8_CD3_tiv_outer']
+
+# Check any hub cells in df
 
 tissue_types = ['Inner margin',
               'Outer margin',
