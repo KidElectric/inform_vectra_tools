@@ -1,7 +1,6 @@
 import time
 import os
 import sys
-import pdb
 import math
 import glob
 from pathlib import Path
@@ -9,19 +8,25 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 
-#Custom helper functions:
-sys.path.append('/ihome/rbao/bri8/scripts/')
-from helpers import tls
-from helpers import delaunay as delHelpers
-from helpers import delaunayPlots as delPlots
 start = time.time()
 
 #Begin the job
 base = Path(sys.argv[1])
+print('Data source: %s\n' % str(base))
 output = Path(sys.argv[2])
 output.mkdir(parents=True, exist_ok=True)
+print('Data dest: %s\n' % str(output))
 file_type = sys.argv[3]
 jobid = sys.argv[4]
+scripts = Path(sys.argv[5])
+print('Scripts src: %s \n' % scripts)
+#Custom helper functions:
+sys.path.append(str(scripts.joinpath('inform_vectra_tools')))
+from inform_vectra_tools import vecutils as vecUtils
+from inform_vectra_tools import vectra as vectra
+from delaunay_tools import delaunay as delHelpers
+from delaunay_tools import delaunayPlots as delPlots
+
 time_start_str = time.strftime('%Y-%m-%d %H:%M:%S%p', time.localtime(start))
 
 print('Job log beginning at %s' % (time_start_str))
@@ -35,7 +40,7 @@ if len(files_avail)>0:
 else:
     print('No Files found.')
     
-df = pd.read_csv(fn, sep='\t')
+df = pd.read_csv(fn, sep='\t',index_col=1)
 
 
 scale = 1
@@ -44,7 +49,7 @@ max_dist = 35 #microns
 col_dict = {'tissue_col': 'Parent',
             'cell_col': 'Class',
             'cell_x_pos' : 'Centroid X µm',
-            'cell_y_pos' : 'Centroid Y µm'
+            'cell_y_pos' : 'Centroid Y µm',
             'output_cell_col': 'cell_type'}
 
 # Cell type definitions file:
@@ -114,36 +119,31 @@ multi_label_types = {
 x = np.array([x for x in multi_label_types.keys()])
 tiv_only = x[pd.Series(x).str.contains('tiv')] #All tumor invasive margin hub types
 inner_tiv = x[pd.Series(x).str.contains('inner')] #All inner vasive margin hub types
-df = vecUtils.vectra_if_types_to_cell_types(
+df = vecutils.vectra_if_types_to_cell_types(
                                  df.copy(),
                                  multi_label_dict = multi_label_types,
                                  col_dict = col_dict,
                                  verbose = True,
                                  type_adds_tissue = True,
                                  exclusive = False,
-                                 output_cell_type_col = col_dict['output_cell_type'],
+                                 output_cell_type_col = col_dict['output_cell_col'],
                                 )
 
 print(df.groupby('cell_type')['Class'].count())
 
 hub_cells = inner_tiv
-
-            # ['PDL1+_tiv_inner',
-            #  'PDL1-_tiv_inner']
-
 tissue_crit = {'Outer margin': 0} #Tissue type & min number of cells > 0
-
 
 print('scale_factor: %d, max neighbor dist: %d' 
         % (scale,max_dist))
 
 keep_cx = []
-fig = plt.figure(figsize=(18,11))
+fig = plt.figure(figsize=(7,7))
 i = 1
 start = time.time()
 out_stack = []
 idx = ~df.loc[:,col_dict['cell_col']].isna()
-subset=df.loc[idx,:].reset_index()
+subset = df.loc[idx,:].reset_index()
                    
 print('Beginning cell connection detection...')
 
@@ -160,21 +160,18 @@ delcx = delHelpers.generate_log_odds_matrix(connections,
                                              version = 1)
 
 out_stack.append(delcx)
-ax = fig.add_subplot(2,len(labs),i,aspect='equal')
-ax = delPlots.connection_heatmap(delcx, 
+ax = fig.add_subplot(1,1,i)
+col_idx = pd.Series(cell_names).isin(hub_cells)
+ax = delPlots.connection_heatmap(delcx,
                                  cell_names,
+                                 hub_cells = hub_cells,
                                  ax = ax
                                 )
-ax.set_title(lab)
-
 if i > 1:
     ylabel=''
 else:
     ylabel = 'Spoke Cell'
-ax.set_ylabel(ylabel)
-new_fn =jobid + '_' \
-        +  fn.parts[-1].split(']_')[0] \
-        + ']_delaunay_cx_%s' % lab
+new_fn ='%d_delaunay_cx_%d_hubs' % (jobid, len(hub_cells))
 
 print('Saving %s' % new_fn )
 
@@ -187,40 +184,8 @@ out_fn = output.joinpath(new_fn + '.npy')
 np.save(out_fn, arr=delcx, allow_pickle=False)
 
 
-# # Plot difference of tls and neighborhood from rest of core:            
-# non_tls = out_stack[2]
-# for lab,delcx in zip(labs[0:2], out_stack[0:2]):
-#     ax = fig.add_subplot(2,len(labs),i,aspect='equal')         
-#     ax = delPlots.connection_heatmap(delcx-non_tls, 
-#                                      cell_names,
-#                                      ax = ax,
-#                                      vmin = -4,
-#                                      vmax = 4,
-#                                      label = 'log odds'
-#                                     )
-#     ax.set_title(lab + ' - remaining core')
-#     if i > 1:
-#         ylabel=''
-#     else:
-#         ylabel = 'Spoke Cell'
-#     ax.set_ylabel(ylabel)
-#     i = i + 1
-
-# # Lastly add TLS - Neighborhood:
-# ax = fig.add_subplot(2,len(labs),i,aspect='equal')
-# ax = delPlots.connection_heatmap(out_stack[0]-out_stack[1], 
-#                                  cell_names,
-#                                  vmin = -4,
-#                                  vmax = 4,
-#                                  ax = ax,
-#                                  label = 'log odds'
-#                                 )
-# ax.set_title('TLS - Neighborhood')   
-# ax.set_ylabel('')
-            
-img_fn = jobid + '_' \
-         +  fn.parts[-1].split(']_')[0] \
-         +  ']_delaunay_cx_tls-neigh-remain.png'
+#Save heatmap            
+img_fn = new_fn + '.png'
 print('Saving %s' % img_fn)
 plt.savefig(output.joinpath(img_fn))
             
