@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 start = time.time()
-
+debug = True #Set false for full run
 #Begin the job
 base = Path(sys.argv[1])
 print('Data source: %s\n' % str(base))
@@ -17,18 +17,17 @@ output = Path(sys.argv[2])
 output.mkdir(parents=True, exist_ok=True)
 print('Data dest: %s\n' % str(output))
 file_type = sys.argv[3]
-jobid = sys.argv[4]
+jobid = int(sys.argv[4])
 scripts = Path(sys.argv[5])
 print('Scripts src: %s \n' % scripts)
 #Custom helper functions:
 sys.path.append(str(scripts.joinpath('inform_vectra_tools')))
-from inform_vectra_tools import vecutils as vecUtils
+from inform_vectra_tools import vecutils as vecutils
 from inform_vectra_tools import vectra as vectra
 from delaunay_tools import delaunay as delHelpers
 from delaunay_tools import delaunayPlots as delPlots
 
 time_start_str = time.strftime('%Y-%m-%d %H:%M:%S%p', time.localtime(start))
-
 print('Job log beginning at %s' % (time_start_str))
 print("Base path: %s\n" % str(base))
 
@@ -36,13 +35,11 @@ files_avail=glob.glob(str(base.joinpath('*' + file_type)))
 files_avail.sort()
 if len(files_avail)>0:
     #For now, assume there is only one file moved for this job instance:
-    fn=Path(files_avail[0])
+    fn=Path(files_avail[jobid])
 else:
     print('No Files found.')
-    
+print('Loading %s' % fn.parts[-1])    
 df = pd.read_csv(fn, sep='\t',index_col=1)
-
-
 scale = 1
 max_dist = 35 #microns
 
@@ -76,7 +73,13 @@ multi_label_types = {
                            'tissue':'Outer margin'},   
      'CD8_CD3_central_tumor': {'CD3':True, 'CD8': True, 
                            'tissue': 'Center'},  
-    
+    # "CD4" cell
+     'CD3_CD8-_FOXP3-_CD4_inner' : {'CD3':True, 'CD8': False, 'FOXP3':False,
+                                  'tissue':'Inner margin'},  
+     'CD3_CD8-_FOXP3-_CD4_outer' : {'CD3':True, 'CD8': False, 'FOXP3':False,
+                                  'tissue':'Outer margin'},  
+     'CD3_CD8-_FOXP3-_CD4_central_tumor' : {'CD3':True, 'CD8': False, 'FOXP3':False,
+                                  'tissue':'Center'},  
      #PD1+ T-cell CD8 CD3
      'PD1_CD8_CD3_tiv_inner': {'CD3':True, 'CD8': True, 'PD-1': True,
                                'tissue':'Inner margin'}, 
@@ -108,15 +111,16 @@ multi_label_types = {
                         'tissue': 'Center'},
     
      #PDL1+ CD3- PanCK- as estimate of macrophages:
-    'PDL1+_CD3-PanCK-Macro_tiv_inner': {'CD3':False, 'PanCK': False, 'PD-L1': True,
+    'PDL1+_CD3-_PanCK-_macro_tiv_inner': {'CD3':False, 'PanCK': False, 'PD-L1': True,
                         'tissue':'Inner margin'}, 
-    'PDL1+_CD3-PanCK-Macro_tiv_outer': {'CD3':False, 'PanCK': False, 'PD-L1': True,
+    'PDL1+_CD3-_PanCK-_macro_tiv_outer': {'CD3':False, 'PanCK': False, 'PD-L1': True,
                         'tissue':'Outer margin'},   
-    'PDL1+_CD3-PanCK-Macro_central_tumor': {'CD3':False, 'PanCK': False, 'PD-L1': True,
+    'PDL1+_CD3-_PanCK-_macro_central_tumor': {'CD3':False, 'PanCK': False, 'PD-L1': True,
                         'tissue': 'Center'},
     }
 
 x = np.array([x for x in multi_label_types.keys()])
+cell_names = x
 tiv_only = x[pd.Series(x).str.contains('tiv')] #All tumor invasive margin hub types
 inner_tiv = x[pd.Series(x).str.contains('inner')] #All inner vasive margin hub types
 df = vecutils.vectra_if_types_to_cell_types(
@@ -126,12 +130,14 @@ df = vecutils.vectra_if_types_to_cell_types(
                                  verbose = True,
                                  type_adds_tissue = True,
                                  exclusive = False,
-                                 output_cell_type_col = col_dict['output_cell_col'],
                                 )
 
 print(df.groupby('cell_type')['Class'].count())
 
-hub_cells = inner_tiv
+if debug:
+    hub_cells = ['PDL1+_tiv_inner', 'PDL1+_tiv_outer']
+else:
+    hub_cells = inner_tiv
 tissue_crit = {'Outer margin': 0} #Tissue type & min number of cells > 0
 
 print('scale_factor: %d, max neighbor dist: %d' 
@@ -146,13 +152,18 @@ idx = ~df.loc[:,col_dict['cell_col']].isna()
 subset = df.loc[idx,:].reset_index()
                    
 print('Beginning cell connection detection...')
-
+col_dict = {'tissue_col': 'Parent',
+            'cell_col': 'cell_type', #Changed from "Class" above
+            'cell_x_pos' : 'Centroid X µm',
+            'cell_y_pos' : 'Centroid Y µm',
+            }
 connections = delHelpers.df_to_connections_output(subset,
                                                   hub_cells = hub_cells,
                                                   scale = scale,
                                                   max_dist = max_dist,
                                                   col_dict = col_dict,
-                                                  tissue_crit = tissue_crit,                               
+                                                  tissue_crit = tissue_crit,   
+                                                  celltypes_as_cols = False,
                                                   )
 
 delcx = delHelpers.generate_log_odds_matrix(connections,

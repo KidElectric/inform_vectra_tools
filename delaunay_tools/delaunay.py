@@ -143,9 +143,7 @@ def df_to_connections_output(subset,
                                ].values
         tri = Delaunay(points)
         i = 0
-        connections = pd.DataFrame()
-        print('Beginning cell connection detection...')
-        
+        connections = pd.DataFrame()        
         hub_idx = subset.loc[:,cell_col].isin(hub_cells)
         hub_cell_points = subset.loc[hub_idx,
                             (cell_x_pos,
@@ -170,17 +168,19 @@ def df_to_connections_output(subset,
                 connected_dists = dists[is_neighbor]
                 spoke_cell_types = point_list_to_celltype(connected_points, 
                                                           point_lookup)
-                
-                if any(tissue_crit):
-                    tissues = [x for x in tissue_crit.keys()]
-                    assessment = []
-                    for tissue in tissues:
-                        min_cells = tissue_crit[tissue]
-                        tis = np.array(spoke_cell_types)[:,1]
-                        num_tissue_cells = np.sum(tis == tissue)
-                        assessment.append(num_tissue_cells > min_cells)
+                if np.array(spoke_cell_types).ndim == 2:
+                    if any(tissue_crit):
+                        tissues = [x for x in tissue_crit.keys()]
+                        assessment = []
+                        for tissue in tissues:
+                            min_cells = tissue_crit[tissue]
+                            tis = np.array(spoke_cell_types)[:,1]
+                            num_tissue_cells = np.sum(tis == tissue)
+                            assessment.append(num_tissue_cells > min_cells)
+                    else:
+                        assessment = [True]
                 else:
-                    assessment = [True]
+                    assessment = [False]
                 required_tissues_found = not any([x == False for x in assessment])                                 
                 if required_tissues_found:                        
                     temp = pd.DataFrame(spoke_cell_types, columns = ['cx_cell','cx_tissue'])
@@ -197,6 +197,7 @@ def df_to_connections_output(subset,
                     # print(i,hub,'Tissue criteria not met')
             else:
                 print(i,hub,'Not found')
+        print('%d connections found.' % connections.shape[0])
         print('%d hubs failed to meet min cells tissue criteria' % tis_crit_failures)
     else:
         connections = pd.DataFrame(columns = ['cx_cell',
