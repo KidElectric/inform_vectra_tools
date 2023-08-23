@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 start = time.time()
-debug = True #Set false for full run
+debug = False #Set false for full run
 #Begin the job
 base = Path(sys.argv[1])
 print('Data source: %s\n' % str(base))
@@ -36,6 +36,7 @@ files_avail.sort()
 if len(files_avail)>0:
     #For now, assume there is only one file moved for this job instance:
     fn=Path(files_avail[jobid])
+    tissue_id = fn.parts[-1].split('_')[0]
 else:
     print('No Files found.')
 print('Loading %s' % fn.parts[-1])    
@@ -51,72 +52,121 @@ col_dict = {'tissue_col': 'Parent',
 
 # Cell type definitions file:
 # Ideally make into .json or yaml ?
+# multi_label_types = {
+#      #PDL1-
+#      'PDL1neg_tiv_inner': {'PD-L1': False,
+#                         'tissue':'Inner margin'}, 
+#      'PDL1neg_tiv_outer': {'PD-L1': False,
+#                         'tissue':'Outer margin'},   
+#      'PDL1neg_central_tumor': {'PD-L1': False,
+#                            'tissue': 'Center tumor'}, 
+#      #PDL1+
+#      'PDL1_tiv_inner': {'PD-L1': True,
+#                         'tissue':'Inner margin'}, 
+#      'PDL1_tiv_outer': {'PD-L1': True,
+#                         'tissue':'Outer margin'},   
+#      'PDL1_central_tumor': {'PD-L1': True,
+#                            'tissue': 'Center tumor'},   
+#      # T-Cell CD8 CD3
+#      'CD8_CD3_tiv_inner': {'CD3':True, 'CD8': True,
+#                            'tissue':'Inner margin'},      
+#      'CD8_CD3_tiv_outer': {'CD3':True, 'CD8': True,
+#                            'tissue':'Outer margin'},   
+#      'CD8_CD3_central_tumor': {'CD3':True, 'CD8': True, 
+#                            'tissue': 'Center tumor'},  
+#     # "CD4" cell
+#      'CD4_tiv_inner' : {'CD3':True, 'CD8': False, 'FOXP3':False,
+#                                   'tissue':'Inner margin'},  
+#      'CD4_tiv_outer' : {'CD3':True, 'CD8': False, 'FOXP3':False,
+#                                   'tissue':'Outer margin'},  
+#      'CD4_central_tumor' : {'CD3':True, 'CD8': False, 'FOXP3':False,
+#                                   'tissue':'Center tumor'},  
+#      #PD1+ T-cell CD8 CD3
+#      'PD1_CD8_CD3_tiv_inner': {'CD3':True, 'CD8': True, 'PD-1': True,
+#                                'tissue':'Inner margin'}, 
+#      'PD1_CD8_CD3_tiv_outer': {'CD3':True, 'CD8': True, 'PD-1': True,
+#                                'tissue':'Outer margin'},   
+#      'PD1_CD8_CD3_central_tumor': {'CD3':True, 'CD8': True, 'PD-1': True,
+#                                'tissue': 'Center tumor'},  
+#      #Tregs:
+#      'Treg_tiv_inner': {'CD3':True, 'FOXP3':True,
+#                         'tissue':'Inner margin'}, 
+#      'Treg_tiv_outer': {'CD3':True, 'FOXP3':True,
+#                         'tissue':'Outer margin'},   
+#      'Treg_central_tumor': {'CD3':True, 'FOXP3':True,
+#                         'tissue': 'Center tumor'},  
+#      #PD1+ Tregs:
+#      'PD1_Treg_tiv_inner': {'CD3':True, 'FOXP3':True, 'PD-1': True,
+#                             'tissue':'Inner margin'}, 
+#      'PD1_Treg_tiv_outer': {'CD3':True, 'FOXP3':True, 'PD-1': True,
+#                             'tissue':'Outer margin'},   
+#      'PD1_Treg_central_tumor': {'CD3':True, 'FOXP3':True, 'PD-1': True,
+#                             'tissue': 'Center tumor'},
+    
+#     #PDL1- PanCK- PDL1- as estimate of macrophages:
+#     'PDL1neg_macro_tiv_inner': {'CD3':False, 'PanCK': False, 'PD-L1': False,
+#                         'tissue':'Inner margin'}, 
+#     'PDL1neg_macro_tiv_outer': {'CD3':False, 'PanCK': False, 'PD-L1': False,
+#                         'tissue':'Outer margin'},   
+#     'PDL1neg_macro_central_tumor': {'CD3':False, 'PanCK': False, 'PD-L1': False,
+#                         'tissue': 'Center tumor'},
+    
+#      #PDL1+ CD3- PanCK- as estimate of macrophages:
+#     'PDL1_macro_tiv_inner': {'CD3':False, 'PanCK': False, 'PD-L1': True,
+#                         'tissue':'Inner margin'}, 
+#     'PDL1_macro_tiv_outer': {'CD3':False, 'PanCK': False, 'PD-L1': True,
+#                         'tissue':'Outer margin'},   
+#     'PDL1_macro_central_tumor': {'CD3':False, 'PanCK': False, 'PD-L1': True,
+#                         'tissue': 'Center tumor'},
+#     }
+#The order matters! -> the more inclusive types must be defined before the more specific types 
+# i.e. more specific cells will be removed from broader (single marker) categories
+
 multi_label_types = {
      #PDL1-
-     'PDL1-_tiv_inner': {'PD-L1': False,
+     'PDL1neg_tiv_inner': {'PD-L1': False,
                         'tissue':'Inner margin'}, 
-     'PDL1-_tiv_outer': {'PD-L1': False,
-                        'tissue':'Outer margin'},   
-     'PDL1-_central_tumor': {'PD-L1': False,
-                           'tissue': 'Center'}, 
+
      #PDL1+
-     'PDL1+_tiv_inner': {'PD-L1': True,
+     'PDL1_tiv_inner': {'PD-L1': True,
                         'tissue':'Inner margin'}, 
-     'PDL1+_tiv_outer': {'PD-L1': True,
-                        'tissue':'Outer margin'},   
-     'PDL1+_central_tumor': {'PD-L1': True,
-                           'tissue': 'Center'},   
+   
      # T-Cell CD8 CD3
-     'CD8_CD3_tiv_inner': {'CD3':True, 'CD8': True,
+     'CD8_CD3_tiv_inner': {'CD3':True, 'CD8': True,#'PD-L1':False,
                            'tissue':'Inner margin'},      
-     'CD8_CD3_tiv_outer': {'CD3':True, 'CD8': True,
+     'CD8_CD3_tiv_outer': {'CD3':True, 'CD8': True,#'PD-L1':False,
                            'tissue':'Outer margin'},   
-     'CD8_CD3_central_tumor': {'CD3':True, 'CD8': True, 
-                           'tissue': 'Center'},  
+
     # "CD4" cell
-     'CD3_CD8-_FOXP3-_CD4_inner' : {'CD3':True, 'CD8': False, 'FOXP3':False,
+     'CD4_tiv_inner' : {'CD3':True, 'CD8': False, 'FOXP3':False,#'PD-L1':False,
                                   'tissue':'Inner margin'},  
-     'CD3_CD8-_FOXP3-_CD4_outer' : {'CD3':True, 'CD8': False, 'FOXP3':False,
+     'CD4_tiv_outer' : {'CD3':True, 'CD8': False, 'FOXP3':False,#'PD-L1':False,
                                   'tissue':'Outer margin'},  
-     'CD3_CD8-_FOXP3-_CD4_central_tumor' : {'CD3':True, 'CD8': False, 'FOXP3':False,
-                                  'tissue':'Center'},  
+ 
      #PD1+ T-cell CD8 CD3
-     'PD1_CD8_CD3_tiv_inner': {'CD3':True, 'CD8': True, 'PD-1': True,
+     'PD1_CD8_CD3_tiv_inner': {'CD3':True, 'CD8': True, 'PD-1': True,#'PD-L1':False,
                                'tissue':'Inner margin'}, 
-     'PD1_CD8_CD3_tiv_outer': {'CD3':True, 'CD8': True, 'PD-1': True,
+     'PD1_CD8_CD3_tiv_outer': {'CD3':True, 'CD8': True, 'PD-1': True,#'PD-L1':False,
                                'tissue':'Outer margin'},   
-     'PD1_CD8_CD3_central_tumor': {'CD3':True, 'CD8': True, 'PD-1': True,
-                               'tissue': 'Center'},  
+
      #Tregs:
-     'Treg_tiv_inner': {'CD3':True, 'FOXP3':True,
+     'Treg_tiv_inner': {'CD3':True, 'CD8':False,'FOXP3':True,#'PD-L1':False,
                         'tissue':'Inner margin'}, 
-     'Treg_tiv_outer': {'CD3':True, 'FOXP3':True,
+     'Treg_tiv_outer': {'CD3':True, 'CD8':False,'FOXP3':True,#'PD-L1':False,
                         'tissue':'Outer margin'},   
-     'Treg_central_tumor': {'CD3':True, 'FOXP3':True,
-                        'tissue': 'Center'},  
+
      #PD1+ Tregs:
-     'PD1_Treg_tiv_inner': {'CD3':True, 'FOXP3':True, 'PD-1': True,
+     'PD1_Treg_tiv_inner': {'CD3':True,'CD8':False, 'FOXP3':True, 'PD-1': True,#'PD-L1':False,
                             'tissue':'Inner margin'}, 
-     'PD1_Treg_tiv_outer': {'CD3':True, 'FOXP3':True, 'PD-1': True,
+     'PD1_Treg_tiv_outer': {'CD3':True, 'CD8':False,'FOXP3':True, 'PD-1': True,#'PD-L1':False,
                             'tissue':'Outer margin'},   
-     'PD1_Treg_central_tumor': {'CD3':True, 'FOXP3':True, 'PD-1': True,
-                            'tissue': 'Center'},
     
-    #PDL1+ PanCK- PDL1- as estimate of macrophages:
-    'PDL1-_CD3-PanCK-Macro_tiv_inner': {'CD3':False, 'PanCK': False, 'PD-L1': False,
-                        'tissue':'Inner margin'}, 
-    'PDL1-_CD3-PanCK-Macro_tiv_outer': {'CD3':False, 'PanCK': False, 'PD-L1': False,
+    #PDL1- PanCK- PDL1- as estimate of macrophages:
+    'PDL1neg_macro_tiv_outer': {'CD3':False, 'PanCK': False, 'PD-L1': False,
                         'tissue':'Outer margin'},   
-    'PDL1-_CD3-PanCK-Macro_central_tumor': {'CD3':False, 'PanCK': False, 'PD-L1': False,
-                        'tissue': 'Center'},
-    
-     #PDL1+ CD3- PanCK- as estimate of macrophages:
-    'PDL1+_CD3-_PanCK-_macro_tiv_inner': {'CD3':False, 'PanCK': False, 'PD-L1': True,
-                        'tissue':'Inner margin'}, 
-    'PDL1+_CD3-_PanCK-_macro_tiv_outer': {'CD3':False, 'PanCK': False, 'PD-L1': True,
+
+    'PDL1_macro_tiv_outer': {'CD3':False, 'PanCK': False, 'PD-L1': True,
                         'tissue':'Outer margin'},   
-    'PDL1+_CD3-_PanCK-_macro_central_tumor': {'CD3':False, 'PanCK': False, 'PD-L1': True,
-                        'tissue': 'Center'},
     }
 
 x = np.array([x for x in multi_label_types.keys()])
@@ -130,14 +180,16 @@ df = vecutils.vectra_if_types_to_cell_types(
                                  verbose = True,
                                  type_adds_tissue = True,
                                  exclusive = False,
+                                 add_cell_types_as_columns = False,
+                                 output_cell_type_col = 'cell_type',
                                 )
 
 print(df.groupby('cell_type')['Class'].count())
 
-if debug:
-    hub_cells = ['PDL1+_tiv_inner', 'PDL1+_tiv_outer']
-else:
-    hub_cells = inner_tiv
+# if debug:
+# hub_cells = ['PDL1_tiv_inner', 'PDL1neg_tiv_outer']
+# else:
+hub_cells = tiv_only
 tissue_crit = {'Outer margin': 0} #Tissue type & min number of cells > 0
 
 print('scale_factor: %d, max neighbor dist: %d' 
@@ -148,15 +200,16 @@ fig = plt.figure(figsize=(7,7))
 i = 1
 start = time.time()
 out_stack = []
-idx = ~df.loc[:,col_dict['cell_col']].isna()
-subset = df.loc[idx,:].reset_index()
-                   
+                  
 print('Beginning cell connection detection...')
 col_dict = {'tissue_col': 'Parent',
             'cell_col': 'cell_type', #Changed from "Class" above
             'cell_x_pos' : 'Centroid X µm',
             'cell_y_pos' : 'Centroid Y µm',
             }
+idx = ~df.loc[:,col_dict['cell_col']].isna()
+subset = df.loc[idx,:].reset_index()
+
 connections = delHelpers.df_to_connections_output(subset,
                                                   hub_cells = hub_cells,
                                                   scale = scale,
@@ -182,7 +235,7 @@ if i > 1:
     ylabel=''
 else:
     ylabel = 'Spoke Cell'
-new_fn ='%d_delaunay_cx_%d_hubs' % (jobid, len(hub_cells))
+new_fn ='%d_%s_delaunay_cx_%d_hubs' % (jobid,tissue_id, len(hub_cells))
 
 print('Saving %s' % new_fn )
 
@@ -193,7 +246,6 @@ connections.to_csv(out_fn)
 #Save stack out log-odds connectivity matrices
 out_fn = output.joinpath(new_fn + '.npy')
 np.save(out_fn, arr=delcx, allow_pickle=False)
-
 
 #Save heatmap            
 img_fn = new_fn + '.png'

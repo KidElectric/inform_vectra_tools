@@ -132,10 +132,11 @@ def vectra_if_types_to_cell_types(df,
     '''
     cell_col = col_dict['cell_col']
     tissue_col = col_dict['tissue_col']
+    tot = df.shape[0]
     cell_labels = [x for x in multi_label_dict.keys()]
     df.loc[:, output_cell_type_col] = df.loc[:,cell_col]
     for cell in cell_labels: 
-        tot = df.shape[0]
+        print('')
         if exclusive: #Use designated markers exclusively           
             idx = (np.zeros((tot,))).astype(bool) # Start false
             for cond in multi_label_dict[cell]: 
@@ -157,7 +158,7 @@ def vectra_if_types_to_cell_types(df,
                         idx2 = (df.loc[:,tissue_col].values == use) 
                         idx = idx & idx2
                         if verbose:
-                            print(tissue_col, cond, '==', use,'n=', np.sum(idx2))
+                            print(tissue_col, cond, '==', use,'n=', np.sum(idx2),'total',np.sum(idx))
                 else:
                     idx2 = (df.loc[:,cell_col].str.contains(cond) == use)
                     idx = idx & idx2

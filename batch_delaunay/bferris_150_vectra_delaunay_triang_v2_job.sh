@@ -6,13 +6,13 @@
 #SBATCH --mem=32g
 
 module load pathml/1.0.3 #has cv2
-VER=1 # Version of *_v1.py processing script to use
+VER=2 #Round version
 JOB_ID=$SLURM_ARRAY_TASK_ID
 echo "SLURM IN JOB:" $JOB_ID
 echo $SLURM_SCRATCH
 PRJ='HCC-CBS-150-Hillman-BFerris-15132-HN-Vectra'
 BASE='/ix/rbao/Projects/'$PRJ
-DATA_SRC=$BASE'/bi_results/qupath/round_3/cell_exports'
+DATA_SRC=$BASE'/bi_results/qupath/sica_gabe_annotations_bi_round_4/cell_exports'
 DEST=$BASE'/bi_results/spatial/round_'$VER
 SCRIPT_PATH=$BASE'/scripts'
 FILE_TYPE=".txt"
